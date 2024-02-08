@@ -453,28 +453,8 @@ void JSON_print_value(JSON_head_t* head, int indent)
 		}
 		case JSON_NULL:
 		{
-			JSON_POD_t* json_pod = (JSON_POD_t*) head;
 			printf("[NULL]\n");
 			break;
 		}
 	}
-}
-
-int main(int argc, char** argv)
-{
-	FILE* file = fopen("sample.json", "r");
-	fseek(file, 0, SEEK_END);
-	size_t size = ftell(file);
-	fseek(file, 0, SEEK_SET);
-	char* text = malloc(size+1);
-	fread(text, 1, size, file);
-	fclose(file);
-	text[size] = '\0';
-
-	printf("%s\n", text);
-
-	JSON_head_t* json = JSON_parse_value(&text);
-	JSON_print_value(json, 0);
-
-	return 0;
 }
