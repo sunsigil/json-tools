@@ -56,6 +56,10 @@ JSON_head_t* JSON_parse_object(char** text);
 JSON_head_t* JSON_parse_array(char** text);
 JSON_head_t* JSON_parse_null(char** text);
 JSON_head_t* JSON_parse_value(char** text);
-void JSON_print_value(JSON_head_t* head, int indent);
+
+JSON_head_t* JSON_read(const char* path);
+void JSON_write(JSON_head_t* json, const char* path);
+void JSON_print(JSON_head_t* json);
+void JSON_dispose(JSON_head_t* json);
 
 #endif

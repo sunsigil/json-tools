@@ -5,6 +5,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/mman.h>
 
 JSON_head_t* JSON_parse_string(char** text)
 {
@@ -397,64 +400,149 @@ JSON_head_t* JSON_parse_value(char** text)
 	exit(EXIT_FAILURE);
 }
 
-void JSON_print_value(JSON_head_t* head, int indent)
+JSON_head_t* JSON_read(const char* path)
+{
+	int fd = open(path, O_RDONLY);
+	if(fd == -1)
+	{
+		perror("[JSON_read] open");
+		exit(EXIT_FAILURE);
+	}
+	size_t file_size = lseek(fd, 0, SEEK_END);
+	lseek(fd, 0, SEEK_SET);
+	char* file_content = mmap(NULL, file_size, PROT_READ, MAP_PRIVATE, fd, SEEK_SET);
+	if(file_content == NULL)
+	{
+		perror("[JSON_read] mmap");
+		exit(EXIT_FAILURE);
+	}
+	close(fd);
+
+	JSON_head_t* json = JSON_parse_value(&file_content);
+	munmap(file_content, file_size);
+
+	return json;
+}
+
+void JSON_write_RE(int fd, JSON_head_t* head, int indent)
 {
 	switch(*head)
 	{
 		case JSON_STRING:
 		{
 			JSON_string_t* json_string = (JSON_string_t*) head;
-			printf("[STRING] %s\n", json_string->value);
+			dprintf(fd, "\"%s\"", json_string->value);
 			break;
 		}
 		case JSON_INT:
 		{
 			JSON_POD_t* json_pod = (JSON_POD_t*) head;
-			printf("[INT] %d\n", json_pod->value.int_value);
+			dprintf(fd, "%d", json_pod->value.int_value);
 			break;
 		}
 		case JSON_FLOAT:
 		{
 			JSON_POD_t* json_pod = (JSON_POD_t*) head;
-			printf("[FLOAT] %f\n", json_pod->value.float_value);
+			dprintf(fd, "%f", json_pod->value.float_value);
 			break;
 		}
 		case JSON_OBJECT:
 		{
 			JSON_object_t* json_object = (JSON_object_t*) head;
-			printf("[OBJECT]\n");
+			dprintf(fd, "{\n");
 			for(int i = 0; i < json_object->length; i++)
 			{
 				for(int j = 0; j <= indent; j++)
-				{ printf("\t"); }
-				printf("%s : ", ((JSON_string_t*) json_object->keys[i])->value);
-				JSON_print_value(json_object->values[i], indent+1);
+				{ dprintf(fd, "\t"); }
+				dprintf(fd, "\"%s\" : ", ((JSON_string_t*) json_object->keys[i])->value);
+				JSON_write_RE(fd, json_object->values[i], indent+1);
+				if(i < json_object->length-1)
+				{ dprintf(fd, ","); }
+				dprintf(fd, "\n");
 			}
+			for(int j = 0; j < indent; j++)
+			{ dprintf(fd, "\t"); }
+			dprintf(fd, "}");
 			break;
 		}
 		case JSON_ARRAY:
 		{
 			JSON_array_t* json_array = (JSON_array_t*) head;
-			printf("[ARRAY]\n");
+			dprintf(fd, "[\n");
 			for(int i = 0; i < json_array->length; i++)
 			{
 				for(int j = 0; j <= indent; j++)
-				{ printf("\t"); }
-				printf("%d. ", i);
-				JSON_print_value(json_array->values[i], indent+1);
+				{ dprintf(fd, "\t"); }
+				JSON_write_RE(fd, json_array->values[i], indent+1);
+				if(i < json_array->length-1)
+				{ dprintf(fd, ","); }
+				dprintf(fd, "\n");
 			}
+			for(int j = 0; j < indent; j++)
+			{ dprintf(fd, "\t"); }
+			dprintf(fd, "]");
 			break;
 		}
 		case JSON_BOOL:
 		{
 			JSON_POD_t* json_pod = (JSON_POD_t*) head;
-			printf("[BOOL] %s\n", json_pod->value.bool_value ? "true" : "false");
+			dprintf(fd, "%s\n", json_pod->value.bool_value ? "true" : "false");
 			break;
 		}
 		case JSON_NULL:
 		{
-			printf("[NULL]\n");
+			dprintf(fd, "null");
 			break;
 		}
 	}
 }
+
+void JSON_write(JSON_head_t* json, const char* path)
+{
+	int fd = open(path, O_CREAT | O_TRUNC | O_WRONLY, S_IRWXU);
+	if(fd == -1)
+	{
+		perror("[JSON_write] open");
+		exit(EXIT_FAILURE);
+	}
+
+	JSON_write_RE(fd, json, 0);
+
+	close(fd);
+}
+
+void JSON_print(JSON_head_t* json)
+{
+	JSON_write_RE(fileno(stdout), json, 0);
+}
+
+void JSON_dispose(JSON_head_t* json)
+{
+	if(*json == JSON_OBJECT)
+	{
+		JSON_object_t* json_object = (JSON_object_t*) json;
+		for(int i = 0; i < json_object->length; i++)
+		{
+			JSON_dispose(json_object->keys[i]);
+			JSON_dispose(json_object->values[i]);
+		}
+	}
+	else if(*json == JSON_ARRAY)
+	{
+		JSON_array_t* json_array = (JSON_array_t*) json;
+		for(int i = 0; i < json_array->length; i++)
+		{
+			JSON_dispose(json_array->values[i]);
+		}
+	}
+	else if(*json == JSON_STRING)
+	{
+		JSON_string_t* json_string = (JSON_string_t*) json;
+		free(json_string->value);
+	}
+	else
+	{
+		free(json);
+	}
+}
+
