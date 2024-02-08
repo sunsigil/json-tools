@@ -425,7 +425,7 @@ void JSON_print_value(JSON_head_t* head, int indent)
 			printf("[OBJECT]\n");
 			for(int i = 0; i < json_object->length; i++)
 			{
-				for(int i = 0; i <= indent; i++)
+				for(int j = 0; j <= indent; j++)
 				{ printf("\t"); }
 				printf("%s : ", ((JSON_string_t*) json_object->keys[i])->value);
 				JSON_print_value(json_object->values[i], indent+1);
@@ -438,7 +438,7 @@ void JSON_print_value(JSON_head_t* head, int indent)
 			printf("[ARRAY]\n");
 			for(int i = 0; i < json_array->length; i++)
 			{
-				for(int i = 0; i <= indent; i++)
+				for(int j = 0; j <= indent; j++)
 				{ printf("\t"); }
 				printf("%d. ", i);
 				JSON_print_value(json_array->values[i], indent+1);
